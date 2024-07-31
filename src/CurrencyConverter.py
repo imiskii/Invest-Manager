@@ -14,7 +14,7 @@ class CurrencyConversion:
     def __init__(self) -> None:
         # TODO: delete old data .zip files, make separate directory for this
         # Download todays data
-        filename = f"ecb_{date.today():%Y%m%d}.zip"
+        filename = f"ecb_data/ecb_{date.today():%Y%m%d}.zip"
         if not op.isfile(filename):
             urllib.request.urlretrieve(ECB_URL, filename)
         # Create currency converter object
@@ -32,17 +32,22 @@ class CurrencyConversion:
         """
         Convert to EUR from specified currency. If `date` parameter is None then is used most recent date.
         """
+        return self.convert(amount, from_currency, 'EUR', date)
+    
 
-        # Pull conversion
+    def convert(self, amount: float|int, from_currency: str, to_currency: str, date: date|None=None) -> float:
+        """
+        Convert choosen currency to different currency. If `date` parameter is None then is used most recent date.
+        """
         conversion: float = 0
 
         if date is None:
             # Use the most recent conversion rate
-            conversion = self._c.convert(amount, from_currency, 'EUR')
+            conversion = self._c.convert(amount, from_currency, to_currency)
         else:
-            conversion = self._c.convert(amount, from_currency, 'EUR', date=date)
+            conversion = self._c.convert(amount, from_currency, to_currency, date=date)
     
         return conversion
-
+    
 
 # END OF FILE #
