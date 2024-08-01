@@ -20,19 +20,19 @@ class Controller():
     def load_assets_data(self, excel_path:str) -> None:
         failed = "" # just for failed asset tickers log
         try:
-            self._view.update_login_log_progress_bar(1, f"Loading excel file data")
+            self._view.loading_layout.update_login_log_progress_bar(1, f"Loading excel file data")
             self._excel_data.read_portfolio_excel(excel_path)
             tickers:list = self._excel_data.get_all_tickers()
             for i, asset_ticker in enumerate(tickers):
                 progress:float = (i+1)/len(tickers)
-                self._view.update_login_log_progress_bar(progress, f"Processing asset: {asset_ticker}")
+                self._view.loading_layout.update_login_log_progress_bar(progress, f"Processing asset: {asset_ticker}")
                 asset = self._portfolio.construct_asset(asset_ticker)
                 if asset is None:
                     failed = failed + ", " + asset_ticker
                     self._view.update_log_line(f"Asset {failed} failed to load.")
-                    self._view.update_login_log_progress_bar(progress, f"Processing asset: {asset_ticker}")
+                    self._view.loading_layout.update_login_log_progress_bar(progress, f"Processing asset: {asset_ticker}")
         except Exception as e:
-            self._view.update_login_log_progress_bar(0, e)
+            self._view.loading_layout.update_login_log_progress_bar(0, e)
 
 
     def reset_loaded(self) -> None:

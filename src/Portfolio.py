@@ -168,6 +168,7 @@ class Portfolio:
         if self.currency_conversion != currency_conversion:
             self.currency_conversion = currency_conversion
             self._portfolio_uniform_value = 0
+            self._evolution_data = None
             for asset in self._assets:
                 asset.change_uniform_currency(currency_conversion)
                 self._portfolio_uniform_value += asset.current_uniform_value
