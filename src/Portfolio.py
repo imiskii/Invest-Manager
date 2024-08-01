@@ -184,7 +184,6 @@ class Portfolio:
         if portfolio_data is None:
             return None
         
-        # TODO: try: catch: ConnectionError
         self._fdp.pull_ticker_history_data(ticker, portfolio_data['info']['First buy'])
 
         history_data:pd.Series = self._fdp.get_history_data(ticker)

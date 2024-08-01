@@ -5,6 +5,7 @@
 from currency_converter import CurrencyConverter, RateNotFoundError, ECB_URL
 from datetime import date
 import os.path as op
+from os import remove, listdir
 import urllib.request
 
 
@@ -12,13 +13,22 @@ class CurrencyConversion:
 
     
     def __init__(self) -> None:
-        # TODO: delete old data .zip files, make separate directory for this
+        directory = "ecb_data"
+        filename = f"ecb_{date.today():%Y%m%d}.zip"
+        latest = op.join(directory, filename)
+        # Delete old data ECB .zip files
+        for item in listdir(directory):
+            item_path = op.join(directory, item)
+            if op.isfile(item_path) and item_path != latest:
+                try:
+                    remove(item_path)
+                except Exception as e:
+                    pass
         # Download todays data
-        filename = f"ecb_data/ecb_{date.today():%Y%m%d}.zip"
-        if not op.isfile(filename):
-            urllib.request.urlretrieve(ECB_URL, filename)
+        if not op.isfile(latest):
+            urllib.request.urlretrieve(ECB_URL, latest)
         # Create currency converter object
-        self._c = CurrencyConverter(filename, fallback_on_missing_rate=True, fallback_on_wrong_date=True, fallback_on_missing_rate_method='last_known')
+        self._c = CurrencyConverter(latest, fallback_on_missing_rate=True, fallback_on_wrong_date=True, fallback_on_missing_rate_method='last_known')
 
 
     def convert_usd_to_eur(self, amount:float|int, date:date|None=None) -> float:
