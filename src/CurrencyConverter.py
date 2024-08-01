@@ -6,6 +6,7 @@ from currency_converter import CurrencyConverter, RateNotFoundError, ECB_URL
 from datetime import date
 import os.path as op
 from os import remove, listdir
+import sys
 import urllib.request
 
 
@@ -13,7 +14,14 @@ class CurrencyConversion:
 
     
     def __init__(self) -> None:
-        directory = "ecb_data"
+        # Get application path
+        # IMPORTANT: This assume that in the same directory as executable is a directory named `ecb_dat`
+        if getattr(sys, 'frozen', False):
+            application_path = op.dirname(sys.executable)
+        else:
+            application_path = op.dirname(op.abspath(__file__))
+        
+        directory = op.join(application_path, "ecb_data")
         filename = f"ecb_{date.today():%Y%m%d}.zip"
         latest = op.join(directory, filename)
         # Delete old data ECB .zip files
