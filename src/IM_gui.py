@@ -10,8 +10,8 @@ import Controller as ct
 from Portfolio import SUMMARY_HEADER, ASSETS_HEADER, CURRENCIES, format_value
 
 
-DEFAULT_CHART_TICKERS:list = ['PORTFOLIO']
-
+DEFAULT_GRAPH_TICKERS:list = ['PORTFOLIO']
+ASSET_SHOW_OPTIONS:list = ['All', 'Owned', 'Sold']
 
 sg.theme('Light Blue 2')
 
@@ -23,7 +23,7 @@ class IMMainGui:
         self._construct_layout()
         # Initialize GUI attributes
         self._selected_layout:int = 1
-        self._chart_tickers = DEFAULT_CHART_TICKERS
+        self._graph_tickers = DEFAULT_GRAPH_TICKERS
 
 
     def _construct_layout(self) -> None:
@@ -31,10 +31,10 @@ class IMMainGui:
         self.loading_layout:LoadingLayout = LoadingLayout()
         self.summary_layout:SummaryLayout = SummaryLayout()
         self.assets_layout:AssetLayout = AssetLayout()
-        self.chart_layout:ChartLayout = ChartLayout()
+        self.graph_layout:GraphLayout = GraphLayout()
         # Main window layout
         _main_layout = [[sg.Text("Used Currency: "), sg.Combo(CURRENCIES, enable_events=True, readonly=True, key='-CURRENCY_COMBO-', default_value=CURRENCIES[0])],
-                    [sg.TabGroup([[sg.Tab('Summary', self.summary_layout.layout), sg.Tab('Assets info', self.assets_layout.layout), sg.Tab('Charts', self.chart_layout.layout)]])],
+                    [sg.TabGroup([[sg.Tab('Summary', self.summary_layout.layout), sg.Tab('Assets info', self.assets_layout.layout), sg.Tab('Graphs', self.graph_layout.layout)]])],
                     [sg.Button('Change .xlsx file'), sg.Button('Close Invest Manager Appliaction')],
                     [sg.Text("", key='-LOG_LINE-')]]
         # Loading + Main layout
@@ -47,7 +47,7 @@ class IMMainGui:
         self.loading_layout.connect_to_main_window(self._window, self._controller)
         self.summary_layout.connect_to_main_window(self._window, self._controller)
         self.assets_layout.connect_to_main_window(self._window, self._controller)
-        self.chart_layout.connect_to_main_window(self._window, self._controller)
+        self.graph_layout.connect_to_main_window(self._window, self._controller)
 
 
     def open_main_window(self):
@@ -59,9 +59,11 @@ class IMMainGui:
                 self._event_load_file(event, values)
                 self._event_change_xlsx(event)
                 self._event_change_currency(event, values)
-                self._event_update_chart(event, values)
+                self._event_update_graph(event, values)
                 self._event_plot(event)
-                
+                self._event_filter_summary_table(event, values)
+
+
 
         self.close_main_window()
 
@@ -92,10 +94,10 @@ class IMMainGui:
     
     def _update_currency_related_content(self) -> None:
         """ Updates just content which is related to currency conversions """
-        tables = self._controller.get_table_data()
-        self.summary_layout.update_summary_layout(tables[0], tables[2], tables[3]) # 0: summary data, 2: total invested money, 3: current portfolio value
-        self.assets_layout.update_assets_layout(tables[1]) # 1: assets data
-        self.chart_layout.upadte_chart_layout(DEFAULT_CHART_TICKERS + [ticker[0] for ticker in tables[1]], self._window['-CHART_LIST_BOX-'].get()) # Second argument is assets ticker
+        summary_data = self._controller.get_summary_data()
+        self.summary_layout.update_summary_layout(summary_data[0], summary_data[1], summary_data[2]) # 0: summary data, 1: total invested money, 2: current portfolio value
+        self.assets_layout.update_assets_layout() # This is not necessary currency related
+        self.graph_layout.upadte_graph_layout()
 
     ### ------------------------- EVENTS ------------------------- ###
 
@@ -111,7 +113,7 @@ class IMMainGui:
     def _event_change_xlsx(self, event) -> None:
         if event == 'Change .xlsx file':
             self._controller.reset_loaded()
-            self._chart_tickers = DEFAULT_CHART_TICKERS
+            self._graph_tickers = DEFAULT_GRAPH_TICKERS
             plt.cla() # Clear canvas
             self._change_layout()
             self.loading_layout.update_login_log_progress_bar(0, "")
@@ -123,14 +125,19 @@ class IMMainGui:
             self._initialize_layouts_content()
 
 
-    def _event_update_chart(self, event, values) -> None:
-        if event == '-CHART_LIST_BOX-':
-            self.chart_layout.update_chart(values['-CHART_LIST_BOX-'])
+    def _event_update_graph(self, event, values) -> None:
+        if event == '-GRAPH_LIST_BOX-':
+            self.graph_layout.update_graph(values['-GRAPH_LIST_BOX-'])
 
 
     def _event_plot(self, event) -> None:
         if event == 'Plot':
-            self.chart_layout.show_chart_plot()
+            self.graph_layout.show_graph_plot()
+
+
+    def _event_filter_summary_table(self, event, values) -> None:
+        if event == '-ASSET_FILTER_COMBO-':
+            self.assets_layout.update_table(values['-ASSET_FILTER_COMBO-'])
 
 
 
@@ -196,6 +203,7 @@ class AssetLayout(SubLayout):
     def __init__(self) -> None:
         # Layout
         self.layout = [
+            [sg.Combo(values=ASSET_SHOW_OPTIONS, key='-ASSET_FILTER_COMBO-', enable_events=True, default_value='All')],
             [sg.Table(values=[], headings=ASSETS_HEADER,
                         auto_size_columns=True,
                         display_row_numbers=False,
@@ -206,17 +214,31 @@ class AssetLayout(SubLayout):
         # Initialize attribute
 
 
-    def update_assets_layout(self, assets_data:list[list[any]]) -> None:
-        self._window['-ASSET_TABLE-'].update(values=assets_data)
+    def update_assets_layout(self) -> None:
+        self._window['-ASSET_TABLE-'].update(values=self._filter_asset_value(self._controller.get_asset_table_data(), self._window['-ASSET_FILTER_COMBO-'].get()))
 
 
-class ChartLayout(SubLayout):
+    def _filter_asset_value(self, asset_data:list[list[any]], filter: str) -> list[list[any]]:
+        match filter:
+            case 'All':
+                return asset_data
+            case 'Owned':
+                return [row for row in asset_data if row[3] >= 0]
+            case 'Sold':
+                return [row for row in asset_data if row[3] <= 0]
+            
+
+    def update_table(self, filter: str) -> None:
+        self._window['-ASSET_TABLE-'].update(values=self._filter_asset_value(self._controller.get_asset_table_data(), filter))
+
+
+class GraphLayout(SubLayout):
 
     def __init__(self) -> None:
         # Layout
         self.layout = [
-            [sg.Column([[sg.Text("Change chart")],[sg.Listbox(values=DEFAULT_CHART_TICKERS, default_values=DEFAULT_CHART_TICKERS, enable_events=True, key='-CHART_LIST_BOX-', select_mode=sg.LISTBOX_SELECT_MODE_MULTIPLE, expand_x=True, expand_y=True)]], expand_x=True, expand_y=True),
-             sg.Column([[sg.Button('Plot')], [sg.Canvas(key='-EVOLUTION_CHART-', expand_x=True, expand_y=True)]], expand_x=True, expand_y=True)]
+            [sg.Column([[sg.Text("Change graph")], [sg.Listbox(values=DEFAULT_GRAPH_TICKERS, default_values=DEFAULT_GRAPH_TICKERS, enable_events=True, key='-GRAPH_LIST_BOX-', select_mode=sg.LISTBOX_SELECT_MODE_MULTIPLE, expand_x=True, expand_y=True)]], expand_x=True, expand_y=True),
+             sg.Column([[sg.Button('Plot')], [sg.Canvas(key='-EVOLUTION_GRAPH-', expand_x=True, expand_y=True)]], expand_x=True, expand_y=True)]
         ]
         self._figure, self._ax = plt.subplots()
         self._lines:dict[str, list] = dict()
@@ -225,24 +247,26 @@ class ChartLayout(SubLayout):
     def connect_to_main_window(self, window, controller) -> None:
             super().connect_to_main_window(window, controller)
             # Link matplotlib to PySimpleGUI Graph
-            canvas = FigureCanvasTkAgg(self._figure, self._window['-EVOLUTION_CHART-'].TKCanvas)
+            canvas = FigureCanvasTkAgg(self._figure, self._window['-EVOLUTION_GRAPH-'].TKCanvas)
             canvas.get_tk_widget().pack(side='top', fill='both', expand=1)
             
 
-    def upadte_chart_layout(self, ticker_list:list, default_tickers: list) -> None:
-        self._window['-CHART_LIST_BOX-'].update(values=ticker_list)
-        self._window['-CHART_LIST_BOX-'].set_value(default_tickers)
+    def upadte_graph_layout(self) -> None:
+        ticker_list = DEFAULT_GRAPH_TICKERS + self._controller.get_asset_tickers()
+        default_tickers = self._window['-GRAPH_LIST_BOX-'].get()
+        self._window['-GRAPH_LIST_BOX-'].update(values=ticker_list)
+        self._window['-GRAPH_LIST_BOX-'].set_value(default_tickers)
         self._lines:dict[str, list] = dict() # Reset lines dictionary
         plt.cla() # clear plot canvas
-        self.update_chart(default_tickers)
+        self.update_graph(default_tickers)
         # Set axis x_lable and y_label - It is there, because it changes only if currency or whole layout changes
         self._ax.set_xlabel('Time', fontsize=14)
         self._ax.set_ylabel(f"Value in {self._controller.get_current_currency()}", fontsize=14)
         self._ax.grid(True)
 
 
-    def update_chart(self, tickers: list) -> None:
-        """ Update displayed chart with given tickers charts """
+    def update_graph(self, tickers: list) -> None:
+        """ Update displayed graph with given tickers graphs """
         # Remove lines
         line_keys = list(self._lines.keys()) # There has to be created separate list to avoid RuntimeError caused by changing dictionary size during iteration
         for ticker in line_keys:
@@ -252,8 +276,8 @@ class ChartLayout(SubLayout):
         # Add lines
         for ticker in tickers:
             if ticker not in self._lines:
-                chart = self._controller.get_evolution_chart(ticker)
-                line, = self._ax.plot(chart, label=ticker)
+                graph = self._controller.get_evolution_graph(ticker)
+                line, = self._ax.plot(graph, label=ticker)
                 self._lines[ticker] = line
 
         self._ax.set_title(f"Value evolution of {', '.join(tickers)}", fontsize=14)
@@ -266,9 +290,9 @@ class ChartLayout(SubLayout):
         self._figure.canvas.draw()
 
 
-    def show_chart_plot(self) -> None:
+    def show_graph_plot(self) -> None:
         # There should be plt.show(block=False), but the application get stuck if is this used.  Without this however, if the plot window is shown and
-        # it is manipulated with main window the chart plotting broke, and wont be plotting properly anymore.
+        # it is manipulated with main window the graph plotting broke, and wont be plotting properly anymore.
         plt.show()
 
 

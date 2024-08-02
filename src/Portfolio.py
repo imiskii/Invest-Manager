@@ -46,9 +46,9 @@ class Asset():
         Return current value of the owned asset in the chosen uniform currency.
         """
         if self.currency != self.currency_conversion:
-            return curr_conv.convert(self.owned / self._multiply * self._history_data[-1], self.currency, self.currency_conversion)
+            return curr_conv.convert(self.owned / self._multiply * self._history_data.iloc[-1], self.currency, self.currency_conversion)
         else:
-            return self.owned / self._multiply * self._history_data[-1]
+            return self.owned / self._multiply * self._history_data.iloc[-1]
         
 
     def _get_invested_uniform_value(self) -> int|float:
@@ -63,7 +63,7 @@ class Asset():
         """
         Count the evolution of this asset value in chosen uniform currency.
         """
-        owned_shares_frame = pd.DataFrame(0, columns=['value'], index=self._history_data.index)
+        owned_shares_frame = pd.DataFrame(0.0, columns=['value'], index=self._history_data.index)
 
         # Update the DataFrame based on transactions
         for tx in self._records:
@@ -93,14 +93,14 @@ class Asset():
         """
         Return current value of asset unit in its currency. (It is not converted to uniform currency!)
         """
-        return self._history_data[-1]
+        return self._history_data.iloc[-1]
 
 
     def get_current_value(self) -> int|float:
         """
         Return current value of owned asset in its currency. (It is not converted to uniform currency!)
         """
-        return self.owned / self._multiply * self._history_data[-1]
+        return self.owned / self._multiply * self._history_data.iloc[-1]
 
 
 class CSP1Asset(Asset):
@@ -150,17 +150,19 @@ class Portfolio:
         """
         self._dl:dl.DataLoader = portfolio_data_loader
         self._fdp:fdp.FinanceData = history_data_puller
-        self._assets:list[Asset] = [] # list of assets
+        self._assets:dict[str, Asset] = dict() # list of assets
         self._portfolio_uniform_value:float = 0 # Value of portfolio in uniform currency (currency_conversion)
         # Get categories
         self.currency_conversion = currency_conversion # Uniform currency (one of the currencies like EUR, USD,...)
         self._evolution_data = None
+        self._asset_data = None
 
 
     def reset_portfolio(self) -> None:
-        self._assets = list()
+        self._assets = dict()
         self._portfolio_uniform_value = 0
         self._evolution_data = None
+        self._asset_data = None
 
 
     def make_currency_conversion(self, currency_conversion: str) -> None:
@@ -169,7 +171,7 @@ class Portfolio:
             self.currency_conversion = currency_conversion
             self._portfolio_uniform_value = 0
             self._evolution_data = None
-            for asset in self._assets:
+            for asset in self._assets.values():
                 asset.change_uniform_currency(currency_conversion)
                 self._portfolio_uniform_value += asset.current_uniform_value
 
@@ -194,7 +196,7 @@ class Portfolio:
             asset = Asset(ticker, portfolio_data, history_data, self.currency_conversion)
         
         self._portfolio_uniform_value += asset.current_uniform_value
-        self._assets.append(asset)
+        self._assets[ticker] = asset
         return asset
     
 
@@ -212,9 +214,9 @@ class Portfolio:
             tmp_result[category] = {'category': category, 'invested': 0, 'current': 0, 'percentage': 0, 'goal': format_value(goal * 100, '%')}
 
         # Make calculation - all assets have to be in existing category!
-        for asset in self._assets:
+        for asset in self._assets.values():
             tmp_result[asset.category]['invested'] += asset.invested_uniform_value
-            invested += asset.invested_uniform_value
+            invested += asset.current_uniform_value
             tmp_result[asset.category]['current'] += asset.current_uniform_value
 
         # Count percentage and final 2D table
@@ -233,26 +235,36 @@ class Portfolio:
         Get agregated values for average value of portfolio buys and results.
         These are based on ASSETS_HEADER: ['TICKER', 'AVERAGE BUY VALUE' (CURR.), 'CURRENT VALUE' (CURR.), 'OWNED SHARES', 'VALUE OF SHARES' (CURR.), 'PORTFOLIO PERCENTAGE' (%), 'RESULT' (%)]
         """
+        # Check if cache
+        if self._asset_data is not None:
+            return self._asset_data
+
         result:list[list[any]] = list()
 
-        for asset in self._assets:
+        for asset in self._assets.values():
             row = list()
             row.append(asset.ticker)
             row.append(format_value(asset.avg_buy, asset.currency))
             row.append(format_value(asset.get_current_asset_value(), asset.currency))
-            row.append(round(asset.owned, 4))
+            row.append(round(asset.owned, 4)) # it is important that it is NOT STRING (it has to be int/float)
             row.append(format_value(asset.get_current_value(), asset.currency))
             row.append(format_value((asset.current_uniform_value / self._portfolio_uniform_value) * 100, '%'))
             row.append(format_value((asset.current_uniform_value - asset.invested_uniform_value) / asset.invested_uniform_value * 100, '%'))
             result.append(row)
 
+        self._asset_data = result
         return result
+
+
+    def get_tickers(self) -> list[str]:
+        """ Return list with ticker names """
+        return list(self._assets.keys())
 
 
     def get_total_invested(self) -> float:
         """ Return money invested into the portfolio in uniform currency."""
         result:float = 0
-        for asset in self._assets:
+        for asset in self._assets.values():
             result += curr_conv.convert(asset.invested, asset.currency, self.currency_conversion)
 
         return result
@@ -267,14 +279,17 @@ class Portfolio:
         """
         Return evolution data of this portfolio
         """
+        # Check if cached
         if self._evolution_data is not None:
             return self._evolution_data
 
-        if len(self._assets) == 0:
+        assets = list(self._assets.values())
+
+        if len(assets) == 0:
             return None
 
-        result:pd.DataFrame = self._assets[0].evolution_uniform
-        for asset in self._assets[1:]:
+        result:pd.DataFrame = assets[0].evolution_uniform
+        for asset in assets[1:]:
             result = result.add(asset.evolution_uniform, axis=0, fill_value=0)
 
         self._evolution_data = result
@@ -283,14 +298,12 @@ class Portfolio:
 
     def get_ticker_evolution_data(self, ticker: str) -> pd.DataFrame|None:
         """
-        Return evolution chart data of an Asset with the given `ticker`
+        Return evolution graph data of an Asset with the given `ticker`
         """
-        for asset in self._assets:
-            if asset.ticker == ticker:
-                return asset.evolution_uniform
-            
-        return None
-        
+        asset =  self._assets.get(ticker, None)
+        if asset is not None:
+            return asset.evolution_uniform
+        return asset        
 
 
 # END OF FILE #

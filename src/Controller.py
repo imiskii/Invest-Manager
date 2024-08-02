@@ -45,38 +45,45 @@ class Controller():
 
     def get_current_currency(self) -> str:
         return self._portfolio.currency_conversion
-    
 
-    def get_table_data(self) -> list:
+
+    def get_summary_data(self) -> list:
         result = []
         result.append(self._portfolio.get_summary_data()) # index: 0
-        result.append(self._portfolio.get_assets_data()) # index: 1
-        result.append(self._portfolio.get_total_invested()) # index: 2
-        result.append(self._portfolio.get_current_portfolio_value()) # index: 3
+        result.append(self._portfolio.get_total_invested()) # index: 1
+        result.append(self._portfolio.get_current_portfolio_value()) # index: 2
         return result
 
 
-    def get_evolution_chart(self, ticker: str|None=None, date_from:str|None=None, date_to:str|None=None):
+    def get_asset_table_data(self) -> list:
+        return self._portfolio.get_assets_data()
+
+
+    def get_asset_tickers(self) -> list[str]:
+        return self._portfolio.get_tickers()
+
+
+    def get_evolution_graph(self, ticker: str|None=None, date_from:str|None=None, date_to:str|None=None):
         """
-        Get chart with evolution of selected asset with given `ticker`. If `ticker` is None, then graph with evolution of whole portfolio is returned.
+        Get graph with evolution of selected asset with given `ticker`. If `ticker` is None, then graph with evolution of whole portfolio is returned.
         Optional arguments are date_from and date_to (in string format 'YYYY-mm-dd') which can filter the output data.
         """
 
         if ticker in (None, 'PORTFOLIO'):
-            chart_data = self._portfolio.get_evolution_data()
+            graph_data = self._portfolio.get_evolution_data()
         else:
-            chart_data = self._portfolio.get_ticker_evolution_data(ticker)
+            graph_data = self._portfolio.get_ticker_evolution_data(ticker)
             
-        if chart_data is None:
+        if graph_data is None:
             return None
 
         if date_from is None and date_to is None:
-            return chart_data
+            return graph_data
         elif date_from is None and date_to is not None:
-            return chart_data.loc[:date_to]
+            return graph_data.loc[:date_to]
         elif date_to is None and date_from is not None:
-            return chart_data.loc[date_from:]
+            return graph_data.loc[date_from:]
         else:
-            return chart_data.loc[date_from:date_to]
+            return graph_data.loc[date_from:date_to]
 
 # END OF FILE #
